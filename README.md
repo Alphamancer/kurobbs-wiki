@@ -39,7 +39,7 @@ export SKILL_DIR=~/tools/kurobbs-wiki
 ### 方式二：通过 npx skills（若已收录到市场后）
 
 ```bash
-npx skills add <owner>/kurobbs-wiki
+npx skills add Alphamancer/kurobbs-wiki
 ```
 
 > 发布后即可通过市场一键安装，详见下方「发布与收录」。
@@ -174,7 +174,7 @@ kurobbs-wiki/
 - **LobeHub**：`lobehub.com/zh` 提交
 - **awesome-claude-skills**：提 PR 收录
 
-> 安装命令统一为 `npx skills add <owner>/kurobbs-wiki`。
+> 安装命令统一为 `npx skills add Alphamancer/kurobbs-wiki`。
 
 ---
 

@@ -1749,7 +1749,7 @@ def _roster_profile_txt(roster, maxlen=None):
 
 
 def cmd_candidates(args):
-    """规则粗筛（方案C第1层）：为目标主C生成候选队友池（副C/奶/辅助分类）。
+    """规则粗筛（精排流程第 1 层）：为目标主C生成候选队友池（副C/奶/辅助分类）。
 
     不做精确评分，只保证"最有用的候选都进池"（召回率优先），
     供后续 LLM 精评阶段对候选按 6 维度打分。
@@ -1961,7 +1961,7 @@ def cmd_team(args):
             "warn": warn,
         })
     teams.sort(key=lambda x: x["score"], reverse=True)
-    # ---------- 方案C：候选队伍 + 六维度画像摘要（供主 agent 精排） ----------
+    # ---------- 精排流程：候选队伍 + 六维度画像摘要（供主 agent 精排） ----------
     # 不再由脚本内部调 LLM 精排（prompt 只给角色名，LLM 凭名字猜，违背"三角色六维度精排"）。
     # 改为：脚本产出候选队伍 + 每队三角色六维度画像摘要（--profile），由主 agent 精排。
     show_profile = getattr(args, "profile", False)

@@ -1,6 +1,6 @@
 # 🌊 kurobbs-wiki — 库街区鸣潮 WIKI 查询 + 配队助手
 
-一个面向 **Claude Code / Claude Desktop** 的 Agent Skill，直接通过库街区（kurobbs）公开 API 查询鸣潮（Wuthering Waves）的图鉴、攻略与角色资料，并内置**机制画像 + 配队引擎**，还能登录你自己的库街区账号、用真实角色池组队。
+一个遵循 **Agent Skill 开放标准**（SKILL.md）的通用技能，直接通过库街区（kurobbs）公开 API 查询鸣潮（Wuthering Waves）的图鉴、攻略与角色资料，并内置**机制画像 + 配队引擎**，还能登录你自己的库街区账号、用真实角色池组队。支持任意能加载 Agent Skill 的 AI（Claude、Cursor、Copilot、Gemini、OpenClaw 等）。
 
 > 本项目灵感来自日常打鸣潮时"查角色攻略、配队要靠一个个翻网页"的痛点，做成一个 skill 就能在对话里直接问。
 
@@ -25,7 +25,7 @@
 
 ### 方式一：从本地目录安装（最简）
 
-把本仓库 `kurobbs-wiki/` 目录放入你的 Claude Code skills 目录，或在 Claude Code 中：
+把本仓库 `kurobbs-wiki/` 目录放入你的 AI 的 skills 目录（Claude Code、Cursor、Copilot 等均支持），或在支持该目录的 agent 中：
 
 ```bash
 # 将 SKILL_DIR 指向本仓库根目录的绝对路径

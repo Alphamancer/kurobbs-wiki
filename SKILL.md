@@ -6,7 +6,7 @@ metadata:
   author: "VBBB"
   version: 0.1.0
   tags: [wuthering-waves, kurobbs, wiki, game, gacha, team-builder, 鸣潮, 库街区]
-  compatibility: [claude-code, claude-desktop]
+  compatibility: [any-agent-skill] # SKILL.md 是开放标准，兼容所有支持 agent skill 的 AI（Claude/Cursor/Copilot/Gemini/OpenClaw 等）
   language: [zh-CN]
 ---
 

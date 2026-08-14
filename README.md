@@ -138,6 +138,7 @@ python -X utf8 -u scripts/wikiquery.py team 绯雪 --pool 千咲,维里奈,穗�
 kurobbs-wiki/
 ├── SKILL.md               # Skill 指令（触发条件、命令速查、工作流、关键坑）
 ├── README.md              # 本文件（面向使用者）
+├── PUBLISHING.md          # 发布操作清单（作者专用，面向使用者无需看）
 ├── _meta.json             # skill 元数据
 ├── references/
 │   └── catalogue-map.md   # 分类 ID 映射速查表（170+ 节点）
@@ -165,16 +166,15 @@ kurobbs-wiki/
 
 ---
 
-## 🙏 发布与收录
+## 🙏 喜欢的话，帮它被更多人看到
 
-如果你觉得有用，欢迎把本项目收录到你的 skill 市场：
+如果你觉得这个 skill 有用，欢迎把它分享给玩鸣潮的朋友，或收录到你的 skill 市场。
 
-- **SkillsMP** / **Skills.sh**：放在 GitHub 后提交即可
-- **ClawHub**：`clawhub.ai` 直接上传（支持中文）
-- **LobeHub**：`lobehub.com/zh` 提交
-- **awesome-claude-skills**：提 PR 收录
+安装命令：
 
-> 安装命令统一为 `npx skills add Alphamancer/kurobbs-wiki`。
+```bash
+npx skills add Alphamancer/kurobbs-wiki
+```
 
 ---
 

@@ -1,5 +1,7 @@
 # 🌊 kurobbs-wiki — 库街区鸣潮 WIKI 查询 + 配队助手
 
+> 🌍 **Read this in** · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [中文](README.md)
+
 一个遵循 **Agent Skill 开放标准**（SKILL.md）的通用技能，直接通过库街区（kurobbs）公开 API 查询鸣潮（Wuthering Waves）的图鉴、攻略与角色资料，并内置**机制画像 + 配队引擎**，还能登录你自己的库街区账号、用真实角色池组队。支持任意能加载 Agent Skill 的 AI（Claude、Cursor、Copilot、Gemini、OpenClaw 等）。
 
 > 本项目灵感来自日常打鸣潮时"查角色攻略、配队要靠一个个翻网页"的痛点，做成一个 skill 就能在对话里直接问。
@@ -137,7 +139,10 @@ python -X utf8 -u scripts/wikiquery.py team 绯雪 --pool 千咲,维里奈,穗�
 ```
 kurobbs-wiki/
 ├── SKILL.md               # Skill 指令（触发条件、命令速查、工作流、关键坑）
-├── README.md              # 本文件（面向使用者）
+├── README.md              # 本文件（中文，面向使用者）
+├── README.en.md           # English 版本
+├── README.ja.md           # 日本語 版本
+├── README.ko.md           # 한국어 版本
 ├── PUBLISHING.md          # 发布操作清单（作者专用，面向使用者无需看）
 ├── _meta.json             # skill 元数据
 ├── references/

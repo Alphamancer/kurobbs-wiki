@@ -1449,229 +1449,43 @@ def _extract_outro_buffs(roster):
     return has_all_dmg, typed, generic
 
 
-def score_pair(a, b):
-    """双角色机制咬合评分，返回 (总分, [评分明细])。
+def _main_c_buffs(target, a, b):
+    """增益主C清单：提取两名队友对主C的输出类增益（供主 agent 精排时打分）。
 
-    5 个维度，每维度 0-20 分，满分 100：
-    1. 效应协同（双方都主动施加的效应交集，去 effect_buffs 噪声）
-    2. 延奏匹配（A 给队友的增益类型 ↔ B 的输出类型，校验对口）
-    3. 定位互补（奶/输出/拐；双主力输出惩罚）
-    4. 声骸联动（双方声骸绑定同一效应体系）
-    5. 触发闭环（A 武器/机制所需效应 B 能提供）
+    用 _extract_outro_buffs 拿每个队友的延奏/机制增益，
+    再结合主C的输出类型（_extract_damage_types）判断"增益是否对口主C输出"，
+    并区分类型化增益（共鸣解放/重击/普攻/声骸技能伤害加深）与通用增益（攻击/暴击等）。
+    返回 (输出类增益清单, 通用类增益清单, 是否命中主C输出类型的标记)。
     """
-    details = []
-    # 1. 效应协同：只用双方 effects（主动施加）交集，effect_buffs 含噪声不再用于加分
-    a_effects = set(a.get("effects") or [])
-    b_effects = set(b.get("effects") or [])
-    matched = a_effects & b_effects
-    if matched:
-        s1 = min(20, 10 + len(matched) * 5)
-        details.append(f"效应协同 +{s1}：双方共同施加{'、'.join(matched)}")
-    elif a_effects or b_effects:
-        s1 = 6
-        details.append(f"效应协同 +{s1}：双方有效应体系但未共同施加")
-    else:
-        s1 = 8
-        details.append(f"效应协同 +{s1}：双方均无效应体系（直伤通配）")
-    # 2. 延奏匹配：A 给队友的增益类型 ↔ B 的输出类型（类型对口校验）
-    a_all_dmg, a_typed, a_generic = _extract_outro_buffs(a)
-    b_all_dmg, b_typed, b_generic = _extract_outro_buffs(b)
-    b_dmg_types = _extract_damage_types(b)
-    a_dmg_types = _extract_damage_types(a)
-    # A 对 B 的增益覆盖
-    a_covers_b = a_all_dmg or bool(a_typed & b_dmg_types)
-    # B 对 A 的增益覆盖
-    b_covers_a = b_all_dmg or bool(b_typed & a_dmg_types)
-    if a_covers_b and b_covers_a:
-        s2 = 20
-        details.append(f"延奏匹配 +{s2}：双方增益互惠（A给B/B给A 类型对口）")
-    elif a_covers_b or b_covers_a:
-        s2 = 16
-        who = "A 增益覆盖 B" if a_covers_b else "B 增益覆盖 A"
-        details.append(f"延奏匹配 +{s2}：{who} 输出类型")
-    elif a_generic or b_generic:
-        s2 = 10
-        details.append(f"延奏匹配 +{s2}：有通用增益但未命中对方输出类型")
-    else:
-        s2 = 6
-        details.append(f"延奏匹配 +{s2}：无明确增益匹配")
-    # 3. 定位互补（双主力输出惩罚）
-    a_role = (a.get("attributes") or {}).get("定位", "")
-    b_role = (b.get("attributes") or {}).get("定位", "")
-    a_is_healer = any(k in a_role for k in ("治疗", "生存", "奶"))
-    b_is_healer = any(k in b_role for k in ("治疗", "生存", "奶"))
-    a_is_dps = any(k in a_role for k in ("输出", "主力"))
-    b_is_dps = any(k in b_role for k in ("输出", "主力"))
-    a_is_main = "主力" in a_role
-    b_is_main = "主力" in b_role
-    if a_is_healer and b_is_dps:
-        s3 = 20
-        details.append(f"定位互补 +{s3}：{a.get('name')}奶妈 + {b.get('name')}输出")
-    elif b_is_healer and a_is_dps:
-        s3 = 20
-        details.append(f"定位互补 +{s3}：{b.get('name')}奶妈 + {a.get('name')}输出")
-    elif a_is_healer and b_is_healer:
-        s3 = 5
-        details.append(f"定位互补 +{s3}：双奶妈（功能重叠）")
-    elif a_is_main and b_is_main:
-        s3 = 6
-        details.append(f"定位互补 +{s3}：双主力输出抢站场（冲突）")
-    elif a_is_dps and b_is_dps:
-        s3 = 12
-        details.append(f"定位互补 +{s3}：双输出（非主力，可双C）")
-    else:
-        s3 = 14
-        details.append(f"定位互补 +{s3}：{a_role}+{b_role}（非冲突）")
-    # 4. 声骸联动
-    a_echo = str(a.get("echo_sets") or "")
-    b_echo = str(b.get("echo_sets") or "")
-    a_echo_effects = _find_effects(a_echo)
-    b_echo_effects = _find_effects(b_echo)
-    shared_echo = set(a_echo_effects) & set(b_echo_effects)
-    if shared_echo:
-        s4 = min(20, 12 + len(shared_echo) * 4)
-        details.append(f"声骸联动 +{s4}：共享{'、'.join(shared_echo)}效应套")
-    elif a_echo_effects or b_echo_effects:
-        s4 = 8
-        details.append(f"声骸联动 +{s4}：有声骸但效应体系不同")
-    else:
-        s4 = 10
-        details.append(f"声骸联动 +{s4}：无效应声骸（直伤通配）")
-    # 5. 触发闭环（A 的武器/机制需求 B 能提供）
-    a_text = str(a.get("weapons") or "") + " " + str(a.get("core_mechanics") or "")
-    b_text = str(b.get("weapons") or "") + " " + str(b.get("core_mechanics") or "")
-    a_needs = _find_effects(a_text)
-    b_supplies = set(b.get("effects") or [])
-    b_needs = _find_effects(b_text)
-    a_supplies = set(a.get("effects") or [])
-    closed_a = set(a_needs) & b_supplies
-    closed_b = set(b_needs) & a_supplies
-    if closed_a or closed_b:
-        s5 = min(20, 12 + len(closed_a | closed_b) * 4)
-        details.append(f"触发闭环 +{s5}：武器/机制触发条件互补")
-    elif a_needs or b_needs:
-        s5 = 8
-        details.append(f"触发闭环 +{s5}：有触发条件但非互补")
-    else:
-        s5 = 10
-        details.append(f"触发闭环 +{s5}：无特殊触发依赖")
-    total = s1 + s2 + s3 + s4 + s5
-    return total, details
-
-
-def b_damage_types(b_damage_set):
-    """把 rolemix 里的输出类型映射成 buff 关键词"""
-    m = {"普攻": "普攻", "重击": "重击伤害", "共鸣技能": "共鸣技能",
-         "共鸣解放": "共鸣解放伤害", "声骸技能": "声骸技能伤害"}
-    return set(m.get(k, k) for k in b_damage_set)
-
-
-def cmd_pair(args):
-    a = _get_roster(args.char_a)
-    b = _get_roster(args.char_b)
-    total, details = score_pair(a, b)
-    print(f"# 配对评分：{a['name']} × {b['name']} = {total}/100")
-    for d in details:
-        print(f"  {d}")
-    if total >= 80:
-        print(f"\n结论：高度契合，推荐组队")
-    elif total >= 65:
-        print(f"\n结论：较好搭配，可组队")
-    elif total >= 50:
-        print(f"\n结论：一般搭配，特定场景可组")
-    else:
-        print(f"\n结论：契合度低，不推荐主力组队")
-
-
-def score_team(target, a, b):
-    """三人整体评分（机制咬合），返回 (总分, [评分明细])。
-
-    不是两两平均，而是从三人队整体结构评估 5 个维度：
-    1. 主C确认（目标角色在本队当主C的合理性）
-    2. 效应闭合（三人是否共享同一效应体系，形成闭环）
-    3. 增益覆盖（辅助给的增益是否覆盖主C输出类型）
-    4. 定位互补（奶/输出/辅助三位置是否合理）
-    5. 伤害/生存平衡（是否需要奶位）
-    """
-    details = []
-    attrs_t = target.get("attributes") or {}
-    attrs_a = a.get("attributes") or {}
-    attrs_b = b.get("attributes") or {}
-    role_t = str(attrs_t.get("定位") or "")
-    role_a = str(attrs_a.get("定位") or "")
-    role_b = str(attrs_b.get("定位") or "")
     dmg_t = _extract_damage_types(target)
-    dmg_a = _extract_damage_types(a)
-    dmg_b = _extract_damage_types(b)
-    # 1. 主C确认：目标角色定位是不是输出/主力
-    if any(k in role_t for k in ("输出", "主力")):
-        s1 = 18
-        details.append(f"主C确认 +{s1}：{target['name']} 定位主力输出")
-    else:
-        s1 = 8
-        details.append(f"主C确认 +{s1}：{target['name']} 定位是 {role_t or '?'}（非主力输出，偏辅助）")
-    # 2. 效应闭合：三人的 effects 是否有共同交集（形成体系闭环）
-    effects_t = set(target.get("effects") or [])
-    effects_a = set(a.get("effects") or [])
-    effects_b = set(b.get("effects") or [])
-    common = effects_t & effects_a & effects_b
-    pair_common = (effects_t & effects_a) | (effects_t & effects_b) | (effects_a & effects_b)
-    if common:
-        s2 = 20
-        details.append(f"效应闭合 +{s2}：三人共同施加{'、'.join(common)}（体系闭环）")
-    elif pair_common:
-        s2 = 13
-        details.append(f"效应闭合 +{s2}：有二人效应体系交集（部分闭环）")
-    else:
-        s2 = 8
-        details.append(f"效应闭合 +{s2}：无共同效应体系")
-    # 3. 增益覆盖：辅助（非主C的两人）的延奏增益是否覆盖主C输出类型
-    t_all, t_typed, t_gen = _extract_outro_buffs(target)
-    a_all, a_typed, a_gen = _extract_outro_buffs(a)
-    b_all, b_typed, b_gen = _extract_outro_buffs(b)
-    # 主C被队友覆盖
-    covered = (a_all or bool(a_typed & dmg_t)) or (b_all or bool(b_typed & dmg_t))
-    # 是否至少有一个纯辅助/奶（给主C增益）
-    has_support = any(k in role_a for k in ("治疗", "生存", "快速协奏", "辅助")) or \
-                  any(k in role_b for k in ("治疗", "生存", "快速协奏", "辅助"))
-    if covered and has_support:
-        s3 = 18
-        details.append(f"增益覆盖 +{s3}：辅助增益覆盖主C输出，且队伍有辅助位")
-    elif covered:
-        s3 = 14
-        details.append(f"增益覆盖 +{s3}：有增益覆盖主C，但缺明确辅助/奶位")
-    else:
-        s3 = 8
-        details.append(f"增益覆盖 +{s3}：增益未覆盖主C输出类型")
-    # 4. 定位互补：是否为 1主C + 1输出/副C + 1奶/辅助 的合理结构
-    is_healer_a = any(k in role_a for k in ("治疗", "生存", "奶"))
-    is_healer_b = any(k in role_b for k in ("治疗", "生存", "奶"))
-    is_main_a = "主力" in role_a
-    is_main_b = "主力" in role_b
-    if is_healer_a or is_healer_b:
-        s4 = 18
-        details.append(f"定位互补 +{s4}：队伍有奶/生存位（{'、'.join([n for n,r in ((a['name'],role_a),(b['name'],role_b)) if '治疗' in r or '生存' in r or '奶' in r])}）")
-    elif is_main_a and is_main_b:
-        s4 = 8
-        details.append(f"定位互补 +{s4}：两个主力输出抢站场（冲突）")
-    else:
-        s4 = 14
-        details.append(f"定位互补 +{s4}：{role_a}+{role_b}（无奶位但定位非冲突）")
-    # 5. 主C门槛：主C × 每个队友的兼容分不能太低（防第三人凑数）
-    t1, _ = score_pair(target, a)
-    t2, _ = score_pair(target, b)
-    if t1 >= 60 and t2 >= 60:
-        s5 = 18
-        details.append(f"主C门槛 +{s5}：主C与两队友兼容均≥60")
-    elif t1 >= 60 or t2 >= 60:
-        s5 = 10
-        weak = f"{target['name']}×{b['name']}={t2}" if t2 < 60 else f"{target['name']}×{a['name']}={t1}"
-        details.append(f"主C门槛 +{s5}：主C与一队友兼容低（{weak}）")
-    else:
-        s5 = 5
-        details.append(f"主C门槛 +{s5}：主C与两队友兼容均<60（凑数队）")
-    total = s1 + s2 + s3 + s4 + s5
-    return total, details
+    out_a = _extract_outro_buffs(a)
+    out_b = _extract_outro_buffs(b)
+    a_all, a_typed, a_gen = out_a
+    b_all, b_typed, b_gen = out_b
+
+    def _fmt(name, all_dmg, typed, gen):
+        hits = sorted(typed & dmg_t)          # 类型化增益中命中主C输出类型的
+        off = sorted(typed - dmg_t)           # 类型化但未命中主C（可能补主C非核心输出）
+        return hits, off, sorted(gen)
+
+    a_hits, a_off, a_gen_list = _fmt(a["name"], a_all, a_typed, a_gen)
+    b_hits, b_off, b_gen_list = _fmt(b["name"], b_all, b_typed, b_gen)
+    # 输出类增益：命中主C输出类型的类型化增益 + 全伤加深（通配命中）
+    out_list = []
+    if a_all:
+        out_list.append(f"{a['name']}：全伤害加深（通配命中主C输出）")
+    for h in a_hits:
+        out_list.append(f"{a['name']}：{h}伤害加深（命中主C输出）")
+    if b_all:
+        out_list.append(f"{b['name']}：全伤害加深（通配命中主C输出）")
+    for h in b_hits:
+        out_list.append(f"{b['name']}：{h}伤害加深（命中主C输出）")
+    # 通用类增益：攻击提升/暴击/共鸣效率等（不针对特定输出类型，但对输出有普适增益）
+    gen_list = [f"{a['name']}：{k}" for k in a_gen_list] + [f"{b['name']}：{k}" for k in b_gen_list]
+    # 未命中主C的类型化增益（提示，可能补主C非核心输出）
+    off_list = [f"{a['name']}：{k}伤害加深（未命中主C核心输出）" for k in a_off] + \
+               [f"{b['name']}：{k}伤害加深（未命中主C核心输出）" for k in b_off]
+    return out_list, gen_list, off_list
 
 
 def _classify_role(roster):
@@ -1920,19 +1734,20 @@ def cmd_team(args):
         pool.append(r)
     if len(pool) < 2:
         die(f"角色池至少需要 2 个角色（不含目标 {args.target}），当前只有 {len(pool)} 个")
+    # ---------- 效应体系（复用 cmd_candidates 的效应匹配逻辑，方案A：效应匹配 > 攻略实锤 > 增益） ----------
+    target_effects = set(target.get("effects") or [])
     # ---------- 枚举 C(pool,2) ----------
     teams = []
     for combo in itertools.combinations(pool, 2):
         a, b = combo
-        # 三人整体评分（不是两两平均，看整队结构）
-        team_score, team_details = score_team(target, a, b)
-        # 主C门槛（score_team 已含维度5，这里提取 warn 提示）
-        t1, _ = score_pair(target, a)
-        t2, _ = score_pair(target, b)
-        warn = ""
-        if t1 < 60 or t2 < 60:
-            weak = f"{target['name']}×{a['name']}={t1}" if t1 < 60 else f"{target['name']}×{b['name']}={t2}"
-            warn = f"⚠️ 主C×队友低于阈值：{weak}"
+        # 效应体系匹配信号：队友主效应与目标主效应是否有交集（如震谐/热熔）
+        a_effects = set(a.get("effects") or [])
+        b_effects = set(b.get("effects") or [])
+        a_ehit = bool(target_effects & a_effects)
+        b_ehit = bool(target_effects & b_effects)
+        effect_count = int(a_ehit) + int(b_ehit)
+        # 增益主C清单（供主 agent 精排参考，方案A降级为辅助参考，不主导排序）
+        buff_out, buff_gen, buff_off = _main_c_buffs(target, a, b)
         # 来源判定
         a_guided = a["name"] in guide_map
         b_guided = b["name"] in guide_map
@@ -1952,15 +1767,19 @@ def cmd_team(args):
             src_urls += list(guide_map[b["name"]].get("guide_urls", set()))
         teams.append({
             "members": [target["name"], a["name"], b["name"]],
-            "score": team_score,
-            "details": team_details,
-            "top_reason": team_details[0] if team_details else "",
             "source": src,
             "source_note": src_note,
             "source_urls": sorted(set(src_urls)),
-            "warn": warn,
+            "effect_count": effect_count,
+            "effect_a": a_ehit,
+            "effect_b": b_ehit,
+            "buff_out": buff_out,
+            "buff_gen": buff_gen,
+            "buff_off": buff_off,
         })
-    teams.sort(key=lambda x: x["score"], reverse=True)
+    # 方案A排序：效应体系匹配(2/1/0) > 攻略来源(guide>mixed>engine) > 稳定枚举。增益清单不再参与排序。
+    src_rank = {"guide": 0, "mixed": 1, "engine": 2}
+    teams.sort(key=lambda x: (-x["effect_count"], src_rank.get(x["source"], 9)))
     # ---------- 精排流程：候选队伍 + 六维度画像摘要（供主 agent 精排） ----------
     # 不再由脚本内部调 LLM 精排（prompt 只给角色名，LLM 凭名字猜，违背"三角色六维度精排"）。
     # 改为：脚本产出候选队伍 + 每队三角色六维度画像摘要（--profile），由主 agent 精排。
@@ -1969,7 +1788,26 @@ def cmd_team(args):
         # 把每支候选队伍的三角色六维度摘要拼出来，供主 agent(LLM) 逐队精排
         print("\n".join(["=" * 70, "# 候选队伍 + 六维度画像摘要（供LLM精排）", "=" * 70]))
         for i, t in enumerate(teams[: args.top], 1):
-            print(f"\n### 候选 {i}: {' + '.join(t['members'])}  (规则分 {t['score']}/100)")
+            eff_tag = "🧲" * t["effect_count"] if t["effect_count"] else ""
+            print(f"\n### 候选 {i}: {' + '.join(t['members'])}  [{t['source']}]{eff_tag}")
+            # 效应体系匹配（方案A最高优先级）
+            print(f"  [效应体系匹配] {t['effect_count']}/2 名队友与目标主效应一致" if t["effect_count"] else "  [效应体系匹配] 无队友与目标主效应一致")
+            # 增益主C清单（主 agent 精排参考，非主导）
+            print("  [增益主C清单]")
+            if t["buff_out"]:
+                print("  · 输出类增益（命中主C输出）:")
+                for b in t["buff_out"]:
+                    print(f"     {b}")
+            if t["buff_gen"]:
+                print("  · 通用增益（攻击/暴击/共鸣效率等）:")
+                for b in t["buff_gen"]:
+                    print(f"     {b}")
+            if t["buff_off"]:
+                print("  · 未命中主C核心输出的类型化增益:")
+                for b in t["buff_off"]:
+                    print(f"     {b}")
+            if not (t["buff_out"] or t["buff_gen"] or t["buff_off"]):
+                print("     （两队友均无明显输出增益）")
             for mname in t["members"]:
                 r = _get_roster(mname)
                 print(f"\n▸ {mname}:")
@@ -1978,7 +1816,8 @@ def cmd_team(args):
                 if acct_txt:
                     print(f"  [账号真实数据]\n  {acct_txt}")
                 print(f"  [wiki画像]\n  {_roster_profile_txt(r)}")
-        print("\n# 请主 agent 按六维度评估以上候选队伍（结合账号真实命座/武器/声骸状态），输出 Top10 排序。")
+        print("\n# 请主 agent 按六维度评估以上候选队伍，输出 Top10 排序。")
+        print("# 🚨 优先级：① 外部权威攻略钦定的体系协同（效应体系闭环，如震谐/热熔）排最前；② 增益主C清单(buff_out/gen/off)只是关键词粗提取，仅作辅助参考，不决定谁排第一；③ 体系契合 > 通配增益（不要因'全伤害加深'等通配增益多就把双奶排到体系队前面）；④ 精排前先核对用户实际拥有谁。")
         return
     if args.json:
         out = teams[: args.top]
@@ -2000,18 +1839,22 @@ def cmd_team(args):
         url_str = ""
         if t.get("source_urls"):
             url_str = "  📚" + " ".join(u for u in t["source_urls"][:3])
-        score_label = f"{t['score']}/100"
-        print(f"{medal} **{' + '.join(t['members'])}**  (评分 {score_label})  [{src_tag}]{url_str}")
+        eff_tag = " 🧲" * t["effect_count"] if t["effect_count"] else ""
+        print(f"{medal} **{' + '.join(t['members'])}**  [{src_tag}]{eff_tag}{url_str}")
         if t.get("source_note"):
             print(f"   📖 攻略依据：{t['source_note']}")
             for u in t.get("source_urls", [])[:3]:
                 print(f"      🔗 {u}")
-        for d in t["details"]:
-            print(f"   {d}")
-        if t.get("warn"):
-            print(f"   {t['warn']}")
-        if t.get("top_reason"):
-            print(f"   亮点：{t['top_reason']}")
+        # 增益主C清单（普通输出与 --profile 统一体验）
+        print("   🎯 增益主C清单：")
+        if t["buff_out"]:
+            print(f"      · 输出类增益（命中主C输出）：{'；'.join(t['buff_out'])}")
+        if t["buff_gen"]:
+            print(f"      · 通用增益（攻击/暴击/共鸣效率等）：{'；'.join(t['buff_gen'])}")
+        if t["buff_off"]:
+            print(f"      · 未命中主C核心输出的类型化增益：{'；'.join(t['buff_off'])}")
+        if not (t["buff_out"] or t["buff_gen"] or t["buff_off"]):
+            print("      · 两队友均无明显输出增益")
         print()
 
 
@@ -2059,11 +1902,6 @@ def main():
     p_probe.add_argument("--refresh", action="store_true", help="强制重新拉取（跳过缓存）")
     p_probe.add_argument("--json", action="store_true", help="输出结构化 JSON（供 pair/team 引擎用）")
     p_probe.set_defaults(fn=cmd_probe)
-
-    p_pair = sub.add_parser("pair", help="双角色兼容评分（5 维度打分）")
-    p_pair.add_argument("char_a", help="角色 A 名")
-    p_pair.add_argument("char_b", help="角色 B 名")
-    p_pair.set_defaults(fn=cmd_pair)
 
     p_team = sub.add_parser("team", help="从角色池枚举最优队伍")
     p_team.add_argument("target", help="目标角色名（如 穗穗）")

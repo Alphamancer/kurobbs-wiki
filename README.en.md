@@ -1,189 +1,160 @@
-# 🌊 kurobbs-wiki — Kuro BBS Wuthering Waves WIKI Query + Team-Building Assistant
+# 🌊 kurobbs-wiki — Wuthering Waves WIKI helper
 
 > 🌍 **Read this in** · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [中文](README.md)
 
-A universal skill that follows the **Agent Skill open standard** (SKILL.md). It queries the Wuthering Waves gallery, strategy guides, and character profiles directly through the public Kuro BBS (kurobbs) API, and ships with a built-in **mechanism profile + team-building engine**. You can also log in with your own Kuro BBS account and build teams from your real character pool. Works with any AI that can load Agent Skills (Claude, Cursor, Copilot, Gemini, OpenClaw, etc.).
+Hi, welcome! 🌸 This is a little helper that **lives right inside your AI chat box** — you don't need to remember any commands, understand any tech, or install anything. **Just say what you want, the same way you'd text a friend**, and it will look things up, organize them, and explain them to you nice and easy.
 
-> This project was inspired by the pain point of having to flip through web pages one by one when looking up character strategies and team compositions while playing Wuthering Waves — turning it into a skill lets you just ask directly in conversation.
-
----
-
-## ✨ Feature Overview
-
-| Module | Command | Description |
-|------|------|------|
-| 🔍 Catalog / Lists | `tree` / `list` | Categorized catalog tree (170+ nodes) + entries under each category |
-| 📖 Entry Details | `detail` | Character/weapon/item/strategy details; supports `--render` Markdown formatting and `--section` for precise section extraction |
-| 🔎 Name Search | `search` | Cross-category search that automatically traverses three levels of subcategories |
-| 🖼️ Community Post Media | `post` | Bypasses WAF to fetch images, covers, and m3u8 videos from image-first/video posts |
-| 🧠 Mechanism Profile | `probe` | 6-dimension mechanism profile (Effect / buff / playstyle / skill / Echo / Weapon) |
-| 🤝 Pairing Engine | `pair` / `team` | 5-dimension compatibility scoring between two characters, pool-based team building, full 60-character enumeration, and guide cross-validation to fill the pool |
-| 🎯 LLM Re-ranking | `candidates` + `--profile` | Rule-based coarse candidate filtering + LLM per-team fine ranking (most accurate team-building) |
-| 👤 My Account | `my` | Log in to Kuro BBS, view your real characters, build teams with your own characters, and renew tokens |
+It's made especially for **Wuthering Waves players**: not sure how to build your characters? Want to give your favorite character a solid setup? Need a few team ideas? Or even just want to see which characters you have on your account — **you don't have to flip through pages, farm guides, or take notes anymore**. Just ask it directly.
 
 ---
 
-## 📦 Installation
+## 🧠 How it helps you day to day
 
-### Option 1: Install from a local directory (simplest)
+It's super simple to use, just like messaging a good friend. For example, you say:
 
-Place this repository's `kurobbs-wiki/` directory into your AI's skills directory (supported by Claude Code, Cursor, Copilot, etc.), or use it in an agent that supports such directories:
+> "Can you help me see what Echoes would be good for Suishou? Which weapon should I pick?"
+
+It will automatically run errands for you, step by step:
+
+1. 🧭 First it figures out what you're asking (a build? a team? something else?)
+2. 🔎 Then it quietly goes into the WIKI and finds the "Suishou" page
+3. 📖 It picks out the important bits — Echoes, weapons, ascension materials — one by one
+4. 💬 It puts it all together into an easy-to-understand answer for you, complete with links so you can click in for more details
+
+From start to finish, you only say that one thing — it handles everything else.
+
+---
+
+## 💬 You can ask it just like this
+
+> Every example below is labeled "what you say → what it does for you → what you get", and you can use them directly or swap in the character you want to ask about.
+
+### 🎀 Build your favorite character
+
+**What you say:**
+> I love Suishou so much! What Echoes should she wear? Which weapon should she carry?
+
+**What it does:** finds Suishou's info, picks out the Echoes, weapon, and ascension materials, and explains it to you in one clear sentence.
+
+**What you get:** a crystal-clear build recommendation + the matching links, so you can click in if you want more detail.
+
+### 🤝 Build a team with the characters you have
+
+**What you say:**
+> I've got Lupa, Jinhsi, and Yangyang — help me build a team and make my Suishou the main DPS～
+
+**What it does:** tries different combinations with the characters you have, one by one, picks the best fits, and tells you why each one works.
+
+**What you get:** a few recommended teams + the reasoning behind each one, along with guides you can check out.
+
+### 🎯 Want a more refined team
+
+**What you say:**
+> Help me build a team around Flaver, and check a few more guides on it
+
+**What it does:** looks closer — not just picking by rules, but comparing how well the characters work together, so it can line up a team that fits you better.
+
+**What you get:** a sorted list of teams, each one explaining why it's put together that way.
+
+### 📖 Can't understand a guide image / video?
+
+**What you say:**
+> What is this character guide image even talking about? Can you explain it to me?
+
+**What it does:** reads through the guide's image or video content, and organizes the key points — team, Echoes, rotation, and so on — into text for you.
+
+**What you get:** an easy-to-understand guide summary, no more squinting at the image guessing for ages.
+
+### 👤 See the characters on your own account
+
+**What you say:**
+> Check what characters I have on my account and help me build a team
+
+**What it does:** guides you to log in once to your own Kuro Games account in the browser (just fill in your phone number and verification code), and then **only builds teams based on the characters you actually own**.
+
+**What you get:** team recommendations based entirely on your own account, plus reminders about which character might be worth pulling or leveling.
+
+> ✅ **No worries:** the first 4 kinds (look up guides, build teams, read images) **don't need any login at all** — anyone can use them directly; only the last "my account" one needs you to log in once, and your data stays only on your own computer, it doesn't get sent anywhere.
+
+---
+
+## ✨ At a glance, what it can do for you
+
+| What you want to do | What you can say | What it does |
+|-----------|-------------|--------|
+| 📖 Look up a character guide | "What weapon should Suishou carry" | Looks it up and organizes it for you |
+| 🗂️ See what content there is | "What categories are the characters in the game divided into" | Flips through the table of contents and lists them for you |
+| 🤝 Build a team | "Help me build a team" | Analyzes the characters you have and gives you a plan |
+| 🎯 A more refined team | "Build a team around Flaver, check the guides" | Compares several and puts them in order |
+| 👤 Use your own account | "What characters do I have" | Logs in and only works with the characters you actually have |
+| 🖼️ Understand a guide image | "What is this guide image about" | Reads the image and video content and explains it to you |
+
+---
+
+## 🔐 About your privacy, rest easy
+
+> There's just one thing to keep in mind — this helper has one feature that reads your account data. Let me lay it out clearly for you 👇
+
+- **Look up guides, build teams, read images** (the 4 kinds above) → all use public info, **no login needed**, and don't touch any of your personal data.
+- **The "my account" feature** (see which characters you have and build teams with them) → requires you to log in to your own Kuro Games account once in the browser. After you log in, this info is **saved only on your own computer**:
+  - Your login credentials + character list
+  - Each character's unlock status, weapon, Echoes, level, and so on
+- **This data only lives on your device — it's never uploaded to any server.** Your login credentials automatically expire after about 45 minutes, and after that it'll just remind you to log in again.
+- It **won't** make up characters on your account when you haven't logged in, and it **won't** send your account info to any third party.
+
+**If you'd rather not log in at all:** just use the first 4 kinds (look up guides / build teams / read images) — that's more than enough, and you never need "my account".
+
+---
+
+## 📦 Want to install it into your AI? (this part is for whoever's helping you set it up)
+
+> If you're a **regular player** who just wants to use it — then you can **completely skip this part**. Just have a friend who knows a bit about tech (or follow the instructions in your AI tool) help you install it once, and **after it's installed you don't have to worry about anything** — just use the ways of asking above.
+
+<details>
+<summary>👉 Click to open the install steps (for whoever's helping you set it up)</summary>
+
+**Option 1: local install**
+
+Put the `kurobbs-wiki/` folder from the repo into your AI tool's skills / skills directory (Claude Code, Cursor, Copilot, etc. all support this). Then tell the program where this folder is:
 
 ```bash
-# Point SKILL_DIR to the absolute path of this repository's root
-# Windows example
+# Windows:
 set SKILL_DIR=D:\tools\kurobbs-wiki
 
-# macOS / Linux example
+# macOS / Linux:
 export SKILL_DIR=~/tools/kurobbs-wiki
 ```
 
-### Option 2: Via npx skills (once it has been added to the marketplace)
+**Option 2: use a ready-made install command**
 
 ```bash
 npx skills add Alphamancer/kurobbs-wiki
 ```
 
-> Once published, it can be installed with one click from the marketplace — see "Publishing & Inclusion" below.
+**What you need to have installed first:**
 
-### Dependencies
-
-- **Python 3.8+** (pure standard library; `wikiquery.py` has no third-party dependencies)
-- **Playwright** (only needed for `post` to fetch community post media)
+- **Python 3.8+** (your computer probably already has it)
+- **Playwright** (only needed for the "read guide image / video" feature)
   ```bash
   pip install playwright && playwright install chromium
   ```
-- **ffmpeg** (optional, used when `--download-video` downloads m3u8 videos as mp4)
+- **ffmpeg** (optional, only used when downloading videos)
+
+> 💡 **Tip:** those specific instructions (what they're called, how to look them up, how to build teams) are all written in the skill's built-in "usage manual" — once the AI is installed it follows them on its own, so nobody has to memorize them.
+
+</details>
 
 ---
 
-## 🚀 Quick Start
+## ⚠️ Small things you might run into
 
-```bash
-cd $SKILL_DIR
-
-# 1. Initialize the catalog tree (cached to ~/.kurobbs-wiki-cache/)
-python -X utf8 -u scripts/wikiquery.py tree
-
-# 2. Search for a character
-python -X utf8 -u scripts/wikiquery.py search 穗穗 --preview --limit 3
-
-# 3. Fetch a specific section of a strategy guide
-python -X utf8 -u scripts/wikiquery.py detail <previewEntryId> --section "编队&队伍轴推荐"
-
-# 4. Mechanism profile + team building
-python -X utf8 -u scripts/wikiquery.py probe 穗穗
-python -X utf8 -u scripts/wikiquery.py team 穗穗 --pool 洛瑟菈,今汐,秧秧 --top 3
-
-# 5. Log in to your account and build a team with real characters
-python -X utf8 -u scripts/wikiquery.py my login    # enter phone number in browser → drag the slider → enter the verification code
-python -X utf8 -u scripts/wikiquery.py my roles
-python -X utf8 -u scripts/wikiquery.py my team 穗穗 --guide-pool --top 5
-```
-
-> 💡 **Tip**: All commands should be run in the skill directory, and should include `-X utf8 -u` (needed for Chinese/emoji output on Windows).
+- **Sometimes can't find new content?** Game updates add new events and content — it automatically refreshes and looks again, so just give it a moment.
+- **Occasional errors?** The data source sometimes adjusts — it automatically retries and usually recovers on its own.
 
 ---
 
-## 🧠 How to Use the Team-Building Engine
+## 🙏 Like it? Share it with your Wuthering Waves friends
 
-### Two-Character Scoring
+If you find it useful, feel free to share it with the friends you play Wuthering Waves with, or save it to your skills list～
 
-```bash
-python -X utf8 -u scripts/wikiquery.py pair 穗穗 洛瑟菈
-```
-
-Each of the 5 dimensions scores 20 points: Effect synergy / Outro Skill match / role complementarity / Echo linkage / trigger loop. ≥80 indicates a highly compatible pair.
-
-### Building a Team from a Character Pool
-
-```bash
-python -X utf8 -u scripts/wikiquery.py team 穗穗 --pool 洛瑟菈,今汐,秧秧 --top 3   # specify a pool
-python -X utf8 -u scripts/wikiquery.py team 穗穗 --all --top 5                    # full enumeration of 60 characters
-python -X utf8 -u scripts/wikiquery.py team 穗穗 --guide-pool --top 5             # guide cross-validation to auto-fill the pool
-```
-
-Each team is labeled with its source: 🟢 confirmed by a strategy guide / 🟡 hybrid / 🔵 engine inference, and includes a 📚 strategy URL you can click to verify.
-
-### LLM Re-ranking (most accurate team-building)
-
-```bash
-# Step 1: rule-based coarse filtering of the candidate pool (in seconds)
-python -X utf8 -u scripts/wikiquery.py candidates 绯雪 --guide-pool
-
-# Step 2: fetch candidate teams + full 6-dimension profiles for the three characters (large output; redirect to a file)
-python -X utf8 -u scripts/wikiquery.py team 绯雪 --pool 千咲,维里奈,穗穗 --profile --top 10 > %TEMP%\team_profile.txt
-```
-
-Claude performs a per-team 6-dimension re-ranking based on real profile data, identifying roles that are hard for rules to judge, such as "mechanism anchor" and "concerto sub-DPS".
-
----
-
-## 🔐 Privacy & Data Notes
-
-> ⚠️ **Please read this** — this skill includes a login feature that reads your account data.
-
-- **WIKI queries (`tree`/`list`/`detail`/`search`/`probe`/`pair`/`team`)**: all use **public, unauthenticated** APIs, **no login required**, and involve no personal data.
-- **"My Account" feature (`my login`/`my roles`/`my team`/`my sync`)**: requires you to actively log in to Kuro BBS in your browser. After logging in, the following data is **stored locally** in `~/.kurobbs-wiki-cache/`:
-  - `account.json` — login token + your character list
-  - `role_details/` — each character's Resonance Chain unlocks, actual weapon/Echo, skill levels, and stats
-- **This data is stored only on your local machine and is never uploaded to any server**. The token expires in about 45 minutes; `my renew` can refresh it.
-- This skill **will not** guess or fabricate your account characters when not logged in, nor will it send your account data to any third party.
-
-**If you want to stay fully offline / not log in**: just use `tree`/`search`/`detail`/`probe`/`pair`/`team` — the `my` command family is not needed at all.
-
----
-
-## 📚 Directory Structure
-
-```
-kurobbs-wiki/
-├── SKILL.md               # Skill instructions (trigger conditions, command quick reference, workflow, key pitfalls)
-├── README.md              # This file (for users)
-├── PUBLISHING.md          # Publishing checklist (for authors; users don't need to read it)
-├── _meta.json             # skill metadata
-├── references/
-│   └── catalogue-map.md   # Category ID mapping quick reference (170+ nodes)
-└── scripts/
-    ├── wikiquery.py       # Main CLI (tree/list/detail/search/probe/pair/team/candidates/my), pure standard library
-    ├── post_fetch.py      # Community post media fetching (Playwright to bypass WAF)
-    └── kuro_login.py      # Kuro BBS login (browser interaction)
-```
-
----
-
-## ⚠️ Known Limitations
-
-- **Private API, no official documentation**: the field structure may change as Kuro BBS updates; when you hit an error, run `tree --refresh` to re-pull the catalog tree first.
-- **Use at low frequency**: these are public unauthenticated interfaces, and frequent requests may trigger risk control; the script has a built-in 0.05s rate limit.
-- **Categories change dynamically**: game updates add new version-event categories; if you can't find new content, run `list <category> --refresh` or `tree --refresh`.
-- **Strategy entries are "placeholder cards"**: `detail <5-digit id>` may return 2031; use `search --preview` to get the embedded real entryId (this is by design, not a bug).
-- **`-X utf8 -u` is required on Windows**: otherwise Chinese/emoji output will crash under GBK encoding.
-
----
-
-## 🧾 License
-
-[MIT](LICENSE)
-
----
-
-## 🙏 If You Like It, Help It Reach More People
-
-If you find this skill useful, feel free to share it with friends who play Wuthering Waves, or include it in your skill marketplace.
-
-Installation command:
-
-```bash
-npx skills add Alphamancer/kurobbs-wiki
-```
-
----
-
-## 🤝 Contributing
-
-Issues and PRs are welcome. When developing, keep in mind:
-
-- After making changes, run `python -X utf8 -c "import py_compile; py_compile.compile('scripts/wikiquery.py', doraise=True)"` to verify the syntax
-- Keep `wikiquery.py` pure standard library (except for the `post` subcommand), to avoid adding third-party dependencies to the main query flow
-- Follow the "Key Pitfalls" and "Known Blocker Quick Reference" conventions in SKILL.md
+> Technical details for developers: `_meta.json`, `references/`, `scripts/`, etc. are provided for secondary development reference only — regular players don't need to worry about them. Licensed under [MIT](LICENSE).

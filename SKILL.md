@@ -330,7 +330,7 @@ python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my team 绯雪 --guide-pool --
 ## 参考文件
 
 - `references/catalogue-map.md` — 分类 ID 映射速查表（核心分类 + 攻略合集）。完整 170 节点映射可用 `wikiquery.py map --markdown` 实时生成。
-- `references/endstate-matrix.md` — ★ 终焉矩阵专题（险境强袭 S2）：玩法规则、增幅回路、共鸣者强化名单、疲劳值规则（奶辅2点/危机特勤+1）、敌方抗性与队伍匹配方法。用户问「终焉矩阵 / 矩阵 配队 / 疲劳值 / 矩阵强化名单」时必读；含账号角色快照（会过期，以 `my roles` 实测为准）。
+- `references/endstate-matrix.md` — ★ 终焉矩阵专题（险境强袭 S2）：**奖励结构（阶段奖励/周期奖励，星声门槛 21000 或 4~5 队各 5000）**、轮次机制（列表循环+血量翻倍，奖励两轮内拿满）、得分算法实测（2分钟5000分换算）、增幅回路、共鸣者强化名单、疲劳值规则（⚠️上场1点为用户实测，奶辅2点为存疑旧数据）、敌方抗性与队伍匹配方法（排序铁律：强度>避抗>命座；配队推荐必须表格+理由+取舍+整体收益）。用户问「终焉矩阵 / 矩阵 配队 / 疲劳值 / 矩阵强化名单」时必读；含账号角色快照（会过期，以 `my roles` / `my detail` 实测为准）。
 - `scripts/wikiquery.py` — 查询 CLI（tree / map / list / detail / search / post），纯标准库实现，无第三方依赖（`post` 子命令例外：内部调用 `post_fetch.py`，依赖 playwright）。
 - `scripts/post_fetch.py` — 帖子正文多图抓取（Playwright 无头浏览器绕过 WAF）。`post` 命令的底层实现。
 

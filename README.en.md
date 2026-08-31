@@ -88,6 +88,7 @@ From start to finish, you only say that one thing — it handles everything else
 | 🎯 A more refined team | "Build a team around Flaver, check the guides" | Compares several and puts them in order |
 | 👤 Use your own account | "What characters do I have" | Logs in and only works with the characters you actually have |
 | 🖼️ Understand a guide image | "What is this guide image about" | Reads the image and video content and explains it to you |
+| ⚔️ Endstate Matrix team building | "Build me teams for this Endstate Matrix run, just enough for the Astrites" | Plans squads under the current phase's rules, with amp circuits and turn order |
 
 ---
 
@@ -143,6 +144,17 @@ npx skills add Alphamancer/kurobbs-wiki
 > 💡 **Tip:** those specific instructions (what they're called, how to look them up, how to build teams) are all written in the skill's built-in "usage manual" — once the AI is installed it follows them on its own, so nobody has to memorize them.
 
 </details>
+
+---
+
+## ⚔️ Endstate Matrix team building (manually maintained rulebook)
+
+This is the only feature that relies on **manually entered rules** — please pay attention to its freshness 👇
+
+- **The rules are not auto-fetched**: every phase of the Endstate Matrix has different enemy lineups, reward thresholds, amp circuits, and buffed-character lists, and the game offers no public API to read them. All of these rules are **compiled by hand** by the maintainer and stored in `references/endstate-matrix.md`.
+- **Maintenance is required every phase**: whenever the game rotates in a new Matrix phase, someone has to manually verify and update the enemy resistances, Astrite thresholds, buffed roster, and score conversions in this file. **The data carries a snapshot date at the top of the file and is only valid for that phase.**
+- **Our suggestion**: before using this feature, check the snapshot date at the top of `references/endstate-matrix.md`. If a whole game version has passed without an update, team suggestions may be computed under stale rules — defer to what you see in-game, or nudge the maintainer to update.
+- Other features (guides, builds, regular team building, image reading) are unaffected — they read live WIKI data.
 
 ---
 

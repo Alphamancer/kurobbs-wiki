@@ -8,6 +8,9 @@ __pycache__/
 account.json
 *.log
 
+# 发布/私有流程文档（含本地路径隐私，绝不入库）
+PUBLISHING.md
+
 # 编辑器 / 系统
 .vscode/
 .idea/

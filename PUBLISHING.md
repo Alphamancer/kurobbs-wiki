@@ -25,13 +25,26 @@
 独立仓库在本地 `temp/_kurobbs_release/`。每次改完源文件后，把改动的文件复制过去再推送：
 
 ```bash
+# 首次：clone 独立仓库到固定目录
+cd "D:\BaiduSyncdisk\agent demo2\cogni-agent\temp"
+git clone https://github.com/Alphamancer/kurobbs-wiki.git _kurobbs_release
+
+# 每次改完 skill 后：同步改动文件（SKILL.md / README* / references 通用规则 / scripts）
+copy /y "D:\BaiduSyncdisk\agent demo2\cogni-agent\skills\kurobbs-wiki\SKILL.md" "D:\BaiduSyncdisk\agent demo2\cogni-agent\temp\_kurobbs_release\SKILL.md"
+# ...（其他改动的文件同理）
+
+# ⚠️ 推送前必做：diff 确认差异 = 只有本次改动（防止误推无关文件）
 cd "D:\BaiduSyncdisk\agent demo2\cogni-agent\temp\_kurobbs_release"
+git diff --stat          # 应只显示本次改的文件
+git status --short       # 确认没有多出来的文件
+
 git add -A
 git commit -m "更新说明"
 git push origin main
 ```
 
 > ⚠️ 不要直接用 `git push` 推 cogni-agent 大仓库——市场以独立 skill 仓库为单位收录。
+> ⚠️ **账号私有数据（角色池/成型度/UID/`~/.kurobbs-wiki-cache/`）绝不推送**——只在本地 `probe_cache/` 留存，不 copy 进 `_kurobbs_release/`。
 
 ---
 

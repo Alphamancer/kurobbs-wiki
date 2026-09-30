@@ -86,8 +86,11 @@ From start to finish, you only say that one thing — it handles everything else
 | 🗂️ See what content there is | "What categories are the characters in the game divided into" | Flips through the table of contents and lists them for you |
 | 🤝 Build a team | "Help me build a team" | Analyzes the characters you have and gives you a plan |
 | 🎯 A more refined team | "Build a team around Flaver, check the guides" | Compares several and puts them in order |
+| 🌟 Team from a chosen pool | "Pick from Lothecca, Carlotta and Yangyang to team up Suishou" | Chooses the best fit only among the characters you named |
+| 🔍 Who should I invest in | "Who works well with Suishou" | Lists the teammates that match both guide mentions and effects |
 | 👤 Use your own account | "What characters do I have" | Logs in and only works with the characters you actually have |
 | 🖼️ Understand a guide image | "What is this guide image about" | Reads the image and video content and explains it to you |
+| 📄 Read a community post | "What does this post say" | Reads the image/video in a community post and explains it |
 | ⚔️ Endstate Matrix team building | "Build me teams for this Endstate Matrix run, just enough for the Astrites" | Plans squads under the current phase's rules, with amp circuits and turn order |
 
 ---
@@ -137,8 +140,18 @@ npx skills add Alphamancer/kurobbs-wiki
 - **Python 3.8+** (your computer probably already has it)
 - **Playwright** (only needed for the "read guide image / video" feature)
   ```bash
-  pip install playwright && playwright install chromium
+  # ⚠️ Install it into [the same Python you use to run this skill] — a bare
+  #    `pip install` is not enough. Installing for interpreter A while running
+  #    with interpreter B means "not installed" (the script imports playwright
+  #    using whichever python is running it).
+  #    Safest: run these two lines with the very interpreter that runs the script
+  #    (replace `python` with your interpreter's path/command).
+  python -m pip install playwright
+  python -m playwright install chromium
   ```
+  > 💡 If you installed it into an AI tool via `npx skills add`, use **the Python
+  > that tool actually calls**. If you're unsure, the script checks this itself and
+  > prints the correct commands with absolute paths — just copy them.
 - **ffmpeg** (optional, only used when downloading videos)
 
 > 💡 **Tip:** those specific instructions (what they're called, how to look them up, how to build teams) are all written in the skill's built-in "usage manual" — once the AI is installed it follows them on its own, so nobody has to memorize them.

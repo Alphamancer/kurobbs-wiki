@@ -24,8 +24,10 @@
 """
 
 import argparse
+import contextlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -57,13 +59,63 @@ DEFAULT_SEARCH_CATS = [
 ]
 
 
-def die(msg):
-    print(f"[错误] {msg}", file=sys.stderr)
-    sys.exit(1)
+class ApiError(SystemExit):
+    """接口返回 code != 200。
+
+    继承 SystemExit，保证既有 `except SystemExit` 的调用方行为不变；
+    同时把 code/msg/path 带出来，让上层能针对特定错误码做补救
+    （典型：2031「当前词条不存在」= 该 id 是占位卡片，可反解真实正文 id）。
+    """
+
+    def __init__(self, code, msg, path):
+        self.api_code = code
+        self.api_msg = msg
+        self.api_path = path
+        super().__init__(1)
 
 
-def api_post(path, data=None, timeout=20):
-    """POST form-urlencoded，返回 data 字段（code==200 时）"""
+# 静默开关：批量遍历分类（如 search 扫十来个分类）时，单点网络抖动不该刷屏。
+# 由调用方用 quiet_errors() 临时打开；单条命令默认照常报错，不掩盖问题。
+_QUIET_ERRORS = False
+
+
+@contextlib.contextmanager
+def quiet_errors():
+    global _QUIET_ERRORS
+    old = _QUIET_ERRORS
+    _QUIET_ERRORS = True
+    try:
+        yield
+    finally:
+        _QUIET_ERRORS = old
+
+
+def die(msg, code=None):
+    if not _QUIET_ERRORS:
+        print(f"[错误] {msg}", file=sys.stderr)
+    raise SystemExit(1 if code is None else code)
+
+
+def hint(msg):
+    """非致命提示（如「已自动转取正文」）。静默模式下不输出，避免批量调用刷屏。"""
+    if not _QUIET_ERRORS:
+        print(msg, file=sys.stderr)
+
+
+# 网络层重试：TLS 抖动（SSL: UNEXPECTED_EOF_WHILE_READING）、连接被提前关闭
+# 在这类无鉴权公开接口上偶发。退避重试可消除，避免把偶发当致命错误。
+NET_RETRIES = 2
+NET_BACKOFF = 0.4
+
+
+def api_post(path, data=None, timeout=20, retries=None):
+    """POST form-urlencoded，返回 data 字段（code==200 时）
+
+    网络层异常（URLError / SSL EOF / timeout）自动退避重试；
+    HTTP 状态错误与业务 code!=200 不重试（重试没有意义），后者抛 ApiError。
+    """
+    if retries is None:
+        retries = NET_RETRIES
     url = BASE + path
     payload = urllib.parse.urlencode(data or {}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
@@ -74,19 +126,26 @@ def api_post(path, data=None, timeout=20):
     req.add_header("source", SOURCE)
     req.add_header("wiki_type", WIKI_TYPE)
     req.add_header("devcode", DEV_CODE)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        die(f"网络错误: {e}")
+    raw = None
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+            break
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", errors="replace")
+            break
+        except Exception as e:  # URLError / ssl.SSLError / socket.timeout ...
+            if attempt < retries:
+                time.sleep(NET_BACKOFF * (2 ** attempt))
+                continue
+            die(f"网络错误: {e}")
     try:
         obj = json.loads(raw)
     except json.JSONDecodeError:
-        die(f"响应非 JSON: {raw[:200]}")
+        die(f"响应非 JSON: {(raw or '')[:200]}")
     if obj.get("code") != 200:
-        die(f"接口返回错误 [{path}]: code={obj.get('code')} msg={obj.get('msg')}")
+        raise ApiError(obj.get("code"), obj.get("msg"), path)
     return obj.get("data")
 
 
@@ -179,6 +238,86 @@ def get_catalogue_entries(cat_id, refresh=False):
     return records
 
 
+# 卡片外链里指向真实词条 / 帖子的 id 提取。
+# 这些 URL 形态会随站点改版变化，统一用正则抽数字，避免各处硬编码切片。
+_ITEM_ID_RE = re.compile(r"/item/(\d+)")
+_POST_ID_RE = re.compile(r"/(?:post|postDetail)/(\d+)")
+
+
+def _id_from_url(url, pattern):
+    m = pattern.search(str(url or ""))
+    return m.group(1) if m else ""
+
+
+def _card_body_id(record):
+    """从一条列表记录里解析「真实正文 id」。
+
+    占位卡片的正文目标可能挂在三处，按可靠性排序：
+      1) content.linkUrl → https://wiki.kurobbs.com/mc/item/<id>
+         （linkType=2 的外链卡、部分 linkType=1 的词条卡都走这里）
+      2) content.linkGather[].linkConfig（linkType=1 内嵌词条 / 带 linkUrl 的外链）
+      3) record.entryId → 部分分类（如共鸣者）的卡片直接挂了真实词条 id
+    ⚠️ 不要直接拿 content.linkUrl 当 id：老卡片里这个字段可能是 "11" / "ww"
+       这类脏值，所以必须先过正则。
+    解析不出返回 ""，由调用方决定是否回退成卡片自身 id。
+    """
+    c = (record or {}).get("content") or {}
+    body = _id_from_url(c.get("linkUrl"), _ITEM_ID_RE)
+    if not body:
+        for lg in (c.get("linkGather") or []):
+            lc = (lg or {}).get("linkConfig") or {}
+            if lc.get("linkType") == 1 and lc.get("entryId"):
+                body = str(lc["entryId"])
+                break
+            body = body or _id_from_url(lc.get("linkUrl"), _ITEM_ID_RE)
+    if not body:
+        eid = str((record or {}).get("entryId") or "")
+        if eid and eid != str((record or {}).get("id") or ""):
+            body = eid
+    return body
+
+
+def _card_post_id(record):
+    """从一条列表记录里解析「社区帖 postId」（非社区帖返回 ""）。
+
+    帖子 id 可能挂在 content.postIdList[0] / content.linkConfig.postId /
+    content.linkUrl（/post/<id>）三处，逐个兜底。
+    """
+    c = (record or {}).get("content") or {}
+    pl = c.get("postIdList") or []
+    if pl:
+        return str(pl[0])
+    lc = c.get("linkConfig") or {}
+    if lc.get("postId"):
+        return str(lc["postId"])
+    return _id_from_url(lc.get("linkUrl"), _POST_ID_RE) or \
+        _id_from_url(c.get("linkUrl"), _POST_ID_RE)
+
+
+def _resolve_placeholder(card_id):
+    """占位卡片 id → (真实正文 id, 条目名, 社区帖 postId)。
+
+    攻略合集 / 合鸣效果 / 武器投影等分类下的条目只是目录挂靠项（多为 5 位 id），
+    detail 会返回 code=2031「当前词条不存在」。真实正文 id / 帖子 id 记在卡片
+    字段里，但接口没有「按卡片 id 反查」的入口，所以这里扫本地列表缓存
+    （list 命令写过的分类）。命中不了返回 (None, 名字或 "", "")，
+    由调用方给出下一步指引。
+    """
+    target = str(card_id)
+    for rec in _load_list_cache().values():
+        for r in (rec.get("records") or []):
+            ids = {str(r.get("entryId") or ""), str(r.get("id") or ""),
+                   str(r.get("linkId") or "")}
+            if target not in ids:
+                continue
+            name = r.get("name") or ((r.get("content") or {}).get("title")) or ""
+            body = _card_body_id(r)
+            if body == target:
+                body = ""
+            return (body or None), name, _card_post_id(r)
+    return None, "", ""
+
+
 # ---------- 命令实现 ----------
 
 def cmd_tree(args):
@@ -227,19 +366,15 @@ def cmd_list(args):
         if not name and isinstance(r.get("content"), dict):
             name = r["content"].get("title") or ""
         if args.images:
-            # 输出封面图 URL（contentUrl / wikiPostList[].cover）+ 内嵌攻略正文 entryId + 帖子 ID
+            # 输出封面图 URL（contentUrl / wikiPostList[].cover）+ 真实正文 entryId + 帖子 ID
             c = r.get("content") or {}
             cover = c.get("contentUrl") or ""
-            body_id = ""
+            # 正文ID 统一走 _card_body_id：兼容 linkType=1（词条卡）、
+            # linkType=2（外链卡）、linkType=3（合集卡）等所有形态，
+            # 且不会把老卡片里 "11"/"ww" 这类脏 linkUrl 当成 id 输出。
+            body_id = _card_body_id(r)
             post_id = ""
-            if c.get("linkType") == 1:
-                body_id = c.get("linkUrl") or ""
-            for lg in (c.get("linkGather") or []):
-                lc = lg.get("linkConfig") or {}
-                if lc.get("linkType") == 1 and lc.get("entryId"):
-                    body_id = lc["entryId"]
-                    break
-            # linkType=4 的社区帖：封面在 wikiPostList[].cover（contentUrl 为空），postId 从 postIdList/linkConfig 取
+            # linkType=4 的社区帖：封面在 wikiPostList[].cover（contentUrl 为空），postId 从 postIdList/linkConfig/linkUrl 取
             if c.get("linkType") == 4:
                 wp = r.get("wikiPostList") or []
                 if not cover and wp and wp[0].get("cover"):
@@ -249,6 +384,10 @@ def cmd_list(args):
                     post_id = str(pl[0])
                 elif c.get("linkConfig") and c["linkConfig"].get("postId"):
                     post_id = str(c["linkConfig"]["postId"])
+                elif c.get("linkConfig") and c["linkConfig"].get("linkUrl"):
+                    post_id = _id_from_url(c["linkConfig"]["linkUrl"], _POST_ID_RE)
+                if not post_id:
+                    post_id = _id_from_url(c.get("linkUrl"), _POST_ID_RE)
                 if post_id:
                     # ⚠️ list 接口不返回帖子类型（图片帖/视频帖），无法预知。
                     # 用 post <帖子ID> 可拿到 postType：1=图片帖，2=视频帖。
@@ -266,8 +405,36 @@ def cmd_list(args):
         print(f"  {name}  (entryId={eid})")
 
 
+def _fetch_entry(entry_id):
+    """取词条详情；遇到 code=2031（占位卡片）自动反解真实正文 id 后重试一次。
+
+    背景：攻略合集 / 合鸣效果 / 武器投影等分类下的条目是「目录挂靠卡片」，
+    它们的 id 直接喂给 getEntryDetail 必然 2031。这不是用户的错，也不该让人
+    自己去找——真实 id 就记在卡片字段里（见 _resolve_placeholder）。
+    反解失败（缓存里没有该分类）时给出可执行的下一步命令，而不是只丢一句错误。
+    """
+    try:
+        return api_post("/wiki/core/catalogue/item/getEntryDetail", {"id": entry_id})
+    except ApiError as e:
+        if str(e.api_code) != "2031":
+            raise
+        body_id, name, post_id = _resolve_placeholder(entry_id)
+        label = f"「{name}」" if name else ""
+        if body_id:
+            hint(f"[提示] id={entry_id} 是占位卡片{label}，已自动转取正文 id={body_id}")
+            return api_post("/wiki/core/catalogue/item/getEntryDetail", {"id": body_id})
+        if post_id:
+            die(f"id={entry_id} 是社区帖卡片{label}，没有 wiki 词条正文。\n"
+                f"  帖子内容请用： post {post_id}")
+        die(f"词条不存在（id={entry_id}）。该 id 多为「攻略合集 / 合鸣效果 / 武器投影」"
+            f"下的占位卡片，真实正文 id 可用下面任一方式取：\n"
+            f"    search <条目名> --json   → 取 previewEntryId\n"
+            f"    list <分类> --images     → 取「正文ID」\n"
+            f"  （先跑一次 list 让本地缓存建立，之后 detail 会自动反解，无需手动指定）")
+
+
 def cmd_detail(args):
-    data = api_post("/wiki/core/catalogue/item/getEntryDetail", {"id": args.entry_id})
+    data = _fetch_entry(args.entry_id)
     if args.section:
         md = render_entry_markdown(data)
         print(extract_section(md, args.section))
@@ -598,7 +765,10 @@ def cmd_search(args):
     seen = set()
     for cat in cats:
         try:
-            records = get_catalogue_entries(cat["id"])
+            # 批量扫分类：单个分类抓取失败（网络抖动 / 分类被下线）不该刷屏，
+            # 静默跳过继续扫其余分类即可 —— 命中结果本身才是用户要的。
+            with quiet_errors():
+                records = get_catalogue_entries(cat["id"])
         except SystemExit:
             continue
         for r in records:
@@ -637,12 +807,22 @@ def cmd_search(args):
         if args.preview:
             try:
                 target = h.get("previewEntryId") or h["entryId"]
-                detail = api_post("/wiki/core/catalogue/item/getEntryDetail",
-                                  {"id": target})
+                # 走 _fetch_entry：命中占位卡片时自动反解真实正文，预览不再空白
+                with quiet_errors():
+                    detail = _fetch_entry(target)
                 md = render_entry_markdown(detail)
                 print(f"     ▸ {make_preview(md).replace(chr(10), ' ')}")
             except SystemExit:
-                print("     ▸ (预览暂不可用)")
+                # 占位卡片里有一类是社区帖（没有 wiki 词条正文），此时给出可执行的替代命令
+                pid = ""
+                try:
+                    pid = _resolve_placeholder(target)[2]
+                except Exception:
+                    pid = ""
+                if pid:
+                    print(f"     ▸ (该条目是社区帖，无 wiki 正文；用 post {pid} 取内容)")
+                else:
+                    print("     ▸ (预览暂不可用)")
 
 
 # ---------- 帖子正文多图（getPostDetail，Playwright 绕过 WAF） ----------
@@ -663,6 +843,17 @@ def cmd_post(args):
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "post_fetch.py")
     if not os.path.exists(script):
         die(f"缺少帖子抓取脚本: {script}")
+    # 依赖预检：post_fetch.py 由【当前解释器】拉起（sys.executable），
+    # 所以 playwright 必须装在同一个解释器下。只检查 import 是否可用，
+    # 并直接给出用当前解释器 install 的命令 —— 否则换一个 python 跑就会
+    # 出现"明明装过却说没装"的循环排查。
+    probe = subprocess.run([_sys.executable, "-c", "import playwright"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if probe.returncode != 0:
+        die("缺少依赖 playwright（帖子详情接口有 WAF，必须用无头浏览器取）。\n"
+            "注意：必须装在【运行本脚本的同一个解释器】下，直接照抄下面两行：\n"
+            f"  {_sys.executable} -m pip install playwright\n"
+            f"  {_sys.executable} -m playwright install chromium")
     cmd = [_sys.executable, "-X", "utf8", "-u", script, args.post_id]
     if args.json:
         cmd.append("--json")
@@ -684,6 +875,10 @@ def cmd_post(args):
 # ---------- 机制画像 probe（F 阶段） ----------
 
 ROSTER_DIR = os.path.join(CACHE_DIR, "roster")
+
+# 画像缓存有效期（秒）。角色数据随版本更新，永久缓存会让新实装角色拿着
+# 旧画像参与配队/机制分析，属于"静默给出错误结论"的高危问题，所以设兜底过期。
+ROSTER_TTL = 14 * 24 * 3600
 
 # 鸣潮效应体系词典（词形归一 → 标准名）
 # ⚠️ 重要：这里只放"真正的效应/体系名"，不要放"属性名"！
@@ -708,6 +903,10 @@ EFFECT_ALIASES = {
     "齿轨": "齿轨机制",      # 千咲
     "光翼共奏": "光翼机制",  # 爱弥斯
     "同步率": "同步率机制",  # 爱弥斯
+    # 同奏体系（跨版本机制，非某一角色专属：1.1 今汐起即有「获得同奏」，
+    # 3.7 起成为可组队的体系标签）。纳入词典后，pair/team 才能识别
+    # "A 提供同奏 ∩ B 响应同奏" 这类协同，而不是当成两个孤立角色。
+    "同奏": "同奏体系", "响应同奏": "同奏体系", "同奏增益": "同奏体系",
 }
 EFFECTS = sorted(set(EFFECT_ALIASES.values()))
 
@@ -724,20 +923,46 @@ BUFF_KEYWORDS = [
 ]
 
 
-def _load_roster_cache(name):
+def _load_roster_cache(name, ttl=None):
+    """读角色机制画像缓存；超过 TTL 视为失效，返回 None 让上层重拉。
+
+    ⚠️ 缓存必须有过期机制：角色数据会随版本更新（新增体系/改数值/改延奏），
+    永久有效的缓存会让"新实装角色"拿着旧版本画像回答，得出方向性错误结论
+    （典型症状：新角色明明有某体系，画像里却是 0 命中）。
+    查刚实装的角色仍建议显式加 --refresh，TTL 只是兜底。
+    传 ttl=0 可关闭过期判断（内部调试用）。
+    """
     path = os.path.join(ROSTER_DIR, f"{name}.json")
-    if os.path.exists(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if ttl is None:
+        ttl = ROSTER_TTL
+    if ttl > 0:
+        ts = data.get("fetchedAt")
+        if ts is None:
+            # 老缓存没有 fetchedAt：退化为文件修改时间，避免全体一次性失效
+            try:
+                ts = os.path.getmtime(path)
+            except OSError:
+                ts = time.time()
         try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+            if (time.time() - float(ts)) > ttl:
+                return None
+        except (TypeError, ValueError):
             return None
-    return None
+    return data
 
 
 def _save_roster_cache(name, data):
     os.makedirs(ROSTER_DIR, exist_ok=True)
     path = os.path.join(ROSTER_DIR, f"{name}.json")
+    if isinstance(data, dict):
+        data["fetchedAt"] = time.time()   # 供 _load_roster_cache 判断过期
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -1938,7 +2163,11 @@ def main():
     p_my.set_defaults(fn=cmd_my)
 
     args = p.parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except ApiError as e:
+        # 兜底：没有被具体命令消化掉的接口错误，照旧打印原文，避免静默退出
+        die(f"接口返回错误 [{e.api_path}]: code={e.api_code} msg={e.api_msg}")
 
 
 if __name__ == "__main__":

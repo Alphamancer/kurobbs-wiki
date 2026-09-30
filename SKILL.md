@@ -1,7 +1,13 @@
 ---
 name: kurobbs-wiki
 description: 库街区（kurobbs）鸣潮 WIKI 资料查询 + 查看自己账号角色。当用户询问鸣潮（游戏）的角色/共鸣者、武器、武器投影、声骸、合鸣效果、敌人、全息战略、合成道具、任务/活动/特殊道具、补给、资源、素材、角色攻略、玩法攻略、区域探索、新手入门、版本攻略等图鉴或攻略信息时使用；也可通过 my 命令登录库街区账号查看自己拥有的角色（my roles）、用自己角色配队（my team）。可列出分类下的条目、获取词条详情、按名称搜索词条，全部通过公开 JSON API 查询。★ 注意：鸣潮 WIKI 查询无需登录；但查"我有什么角色/我的账号角色"需要 my login 登录一次。
+slug: kurobbs-wiki
+displayName: 库街区鸣潮 WIKI 查询
+version: 1.1.0
 license: MIT
+pricing:
+  model: per_call
+  amount_fen: 10
 metadata:
   author: "VBBB"
   version: 0.1.0
@@ -52,6 +58,7 @@ python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py post https://www.kurobbs.com/m
 
 # 3. 获取词条详情（entryId 从 list 输出取）
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py detail 1519669262123954176
+#   ★ 传「占位卡片 id」（攻略合集/合鸣效果下的 5 位 id）也能用了：脚本会自动反解真实正文并重试（2026-10-01 起）
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py detail 1519669262123954176 --json   # 完整结构化内容
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py detail 1519669262123954176 --render # ★ Markdown 攻略排版（推荐：角色/武器/道具/攻略通用）
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py detail 1519669262123954176 --section 角色突破材料   # ★ 只输出指定小节（突破材料/共鸣链/技能介绍/声骸套装推荐…）
@@ -83,6 +90,7 @@ python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my team 穗穗 --top 5        
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my team 穗穗 --guide-pool --top 5  # ★ 补入攻略点名队友（提示值得抽/练谁）
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my renew                      # ★ token 过期后重新登录续期
 python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my account                    # 查看 account.json 原始内容
+
 ```
 
 ## 查询工作流
@@ -168,23 +176,36 @@ python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my account                    
 
 ## 配对引擎（pair / team）
 
-### pair <角色A> <角色B> -- 双角色 5 维度兼容评分
+### ⚠️ 文档与实现的差异（2026-10-01 校正）
 
-| 维度 | 满分 | 评分逻辑 |
-|---|---|---|
-| 效应协同 | 20 | A 施加效应 ∩ B 增益效应（或反向），命中 +10~20 |
-| 延奏匹配 | 20 | A 延奏 buff 类型命中 B 输出方式，全伤加深通配 +18 |
-| 定位互补 | 20 | 奶+输出=20、双输出=12、双奶=5、非冲突=14 |
-| 声骸联动 | 20 | 双方声骸共享效应体系 +12~20 |
-| 触发闭环 | 20 | A 武器/机制所需效应 B 能提供 +12~20 |
+**`pair <角色A> <角色B>` 子命令在当前脚本里不存在。** `wikiquery.py` 实际可用的子命令只有
+`tree / map / list / detail / search / probe / team / candidates / post / my`，
+跑 `pair` 会直接报 `argument cmd: invalid choice: 'pair'`。
 
-- 评分 ≥80 高度契合 / ≥65 较好 / ≥50 一般 / <50 不推荐
-- 画像缺失时自动 probe（方案 A），首次约 2 秒/角色。
+早期版本描述的"双角色 5 维度兼容评分（效应协同/延奏匹配/定位互补/声骸联动/触发闭环，各 20 分）"
+是**旧版设计**，当前脚本已重写为：
+
+> **效应体系匹配（粗排）+ 攻略交叉验证（来源标注）+ 主 agent（LLM）六维度精排**
+
+即 `team` 只负责"召回候选 + 粗排 + 标注来源"，真正的精排由主 agent 读 `team --profile`
+的六维度完整画像完成（见下方「规则粗筛候选 + LLM 精评」一节）。
+
+**要评估两名（或三名）角色的协同，用这两条命令代替 `pair`：**
+
+```bash
+# 看某角色有哪些候选队友（攻略点名 + 效应匹配）
+python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py candidates <角色A> --guide-pool
+# 指定池子跑候选队伍 + 六维度画像，由主 agent 精排
+python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py team <角色A> --pool <角色B>,<角色C> --profile --top 3
+```
+
+> 提醒：`SKILL.md` 的这两节是历史沉淀，若你使用的是带 `pair` 的旧版脚本，
+> 一律以 `python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py --help` 的实际输出为准。
 
 ### team <目标> --pool A,B,C --top N -- 从角色池枚举最优队伍
 
-- 枚举 C(pool, 2) 三人组合（目标固定），三对 pair 评分取平均排名。
-- `--top 3` 输出前三队，每队列出三对评分明细 + 亮点。
+- 枚举 C(pool, 2) 三人组合（目标固定），按「队友与目标主效应的匹配数（2/1/0）→ 攻略来源（guide>mixed>engine）」排序。
+- `--top 3` 输出前三队，每队列出效应匹配数 + 来源标注 + 亮点。
 - 角色池缺失画像自动 probe。
 - `--json` 输出结构化结果。
 
@@ -346,7 +367,7 @@ python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py my team 绯雪 --guide-pool --
 ## 参考文件
 
 - `references/catalogue-map.md` — 分类 ID 映射速查表（核心分类 + 攻略合集）。完整 170 节点映射可用 `wikiquery.py map --markdown` 实时生成。
-- `references/mechanics.md` — ★ 核心战斗机制速查（六大异常效应：霜渐/虚湮/光噪/聚爆/电磁/风蚀；偏谐机制：偏移/干涉/响应 + 震谐/集谐流派；协奏能量/延奏/变奏；共鸣解放；战斗动作：逆势回击/成功闪避/瘫痪/超频技/对策技；声骸机制）。全部来自官方 WIKI 词条（含 entryId 可溯源）。回答"某机制是什么 / 为什么这队是某体系 / 效应怎么运作"时引用。
+- `references/mechanics.md` — ★ 核心战斗机制速查（六大异常效应：霜渐/虚湮/光噪/聚爆/电磁/风蚀；偏谐机制：偏移/干涉/响应 + 震谐/集谐流派；协奏能量/延奏/变奏；**同奏体系（获得同奏/响应同奏/同奏增益）**；共鸣解放；战斗动作：逆势回击/成功闪避/瘫痪/超频技/对策技；声骸机制）。全部来自官方 WIKI 词条（含 entryId 可溯源）。回答"某机制是什么 / 为什么这队是某体系 / 效应怎么运作"时引用。
 - `references/endstate-matrix.md` — ★ 终焉矩阵专题（险境强袭 S2）：**奖励结构（阶段奖励/周期奖励，星声门槛 21000 或 4~5 队各 5000）**、轮次机制（列表循环+血量翻倍，奖励两轮内拿满）、得分算法实测（2分钟5000分换算）、增幅回路、共鸣者强化名单、疲劳值规则（⚠️上场1点为用户实测，奶辅2点为存疑旧数据）、敌方抗性与队伍匹配方法（排序铁律：强度>避抗>命座；配队推荐必须表格+理由+取舍+整体收益）。用户问「终焉矩阵 / 矩阵 配队 / 疲劳值 / 矩阵强化名单」时必读；含账号角色快照（会过期，以 `my roles` / `my detail` 实测为准）。
 - `scripts/wikiquery.py` — 查询 CLI（tree / map / list / detail / search / post），纯标准库实现，无第三方依赖（`post` 子命令例外：内部调用 `post_fetch.py`，依赖 playwright）。
 - `scripts/post_fetch.py` — 帖子正文多图抓取（Playwright 无头浏览器绕过 WAF）。`post` 命令的底层实现。
@@ -380,9 +401,13 @@ detail <previewEntryId 或 entryId> --section "<小节名>"   # 精确取想要�
 
 ### 3. 攻略词条 = 占位卡片（这不是 bug，是结构）
 
-- `角色攻略`/`玩法攻略` 等分类下列出的 `id`（如 `23303`）是**占位卡片**，直接 `detail <它>` 会 **2031「当前词条不存在」**——**这是预期行为，不是报错，不用排查**。
-- 真实正文在卡片的 `content.linkGather[].linkConfig{linkType:1, entryId}` 里；**`search --preview` 已自动解析并用 `previewEntryId` 取详情预览**。
-- 需要攻略全文时：`search <关键词> --json` 拿 `previewEntryId`，再 `detail <previewEntryId> --render/--section`。
+- `角色攻略`/`玩法攻略`/`合鸣效果`/`武器投影` 等分类下列出的 `id`（多为 5 位，如 `23303`、`24257`）是**占位卡片**，直接 `detail <它>` 会 **2031「当前词条不存在」**——**这是预期行为，不是报错，不用排查**。
+- 真实正文在卡片的 `content.linkUrl`（`https://wiki.kurobbs.com/mc/item/<id>`）或 `content.linkGather[].linkConfig{linkType:1, entryId}` 里；**`search --preview` 已自动解析并用 `previewEntryId` 取详情预览**。
+- ★ **2026-10-01 起 `detail` 会自动反解**：命中 2031 时脚本扫本地列表缓存找出真实正文 id 并自动重试，会打印一行
+  `[提示] id=xxx 是占位卡片「名字」，已自动转取正文 id=yyy`。所以**拿到卡片 id 直接 `detail` 也能用了**。
+  - 前提：该分类**至少被 `list` 过一次**（缓存里才有卡片字段）。没命中时脚本会明确告诉你下一步该跑 `list` 还是 `search`。
+  - 若卡片是**社区帖**（没有 wiki 词条正文），脚本会直接告诉你「帖子内容请用：`post <帖子ID>`」。
+- 需要攻略全文时也可以手动走：`search <关键词> --json` 拿 `previewEntryId`，再 `detail <previewEntryId> --render/--section`。
 - 部分攻略卡片（`kuro-post` 社区贴）`detail` 也会 2031（那是帖子不是 wiki 词条）。**这类帖子用 `post <帖子ID>` 拿正文媒体**（`list --images` 已输出帖子ID+封面）；只有纯 wiki 词条用 `detail`。⚠️ **先 `post <帖子ID> --json` 看 postType**：1=图片帖（图在 images/封面），2=视频帖（只有 m3u8 视频，**没有正文多图**，别当一图流处理）。
 
 ### 4. 用 `--json` 验证数据，不要用肉眼猜
@@ -399,6 +424,7 @@ detail <previewEntryId 或 entryId> --section "<小节名>"   # 精确取想要�
 ### 6. 缓存与时效
 
 - 列表缓存 24h。查"最新版本/新活动"内容搜不到时：`list <分类> --refresh` 或 `tree --refresh`。
+- **角色机制画像缓存（`~/.kurobbs-wiki-cache/roster/`）14 天过期**（2026-10-01 新增），过期自动重拉；查**刚实装/刚改动**的角色仍应显式 `probe <角色> --refresh`（详见第 12 条）。
 - 攻略正文会标注"仅供当期参考"（如 V3.5），回答用户时注明时效。
 
 ### 7. Windows GBK 乱码坑（实战复盘沉淀，2026-08-30）
@@ -409,3 +435,45 @@ detail <previewEntryId 或 entryId> --section "<小节名>"   # 精确取想要�
 - **验证角色名真值的方法**：乱码条目的 `content.contentUrl` 图标文件名通常就是角色名（如 `.../椿.png` → 角色"椿"），可作为 name 字段的可靠旁证；也可用 `detail <entryId> --json` 取词条 title。
 - **已知易乱码角色**（截至 2026-08，共鸣者分类）：锁暝（暝字生僻）、心（单字名 3.7 新角色，词条 id=1543050481616060416，图标"心.png"——曾一度被误判为锁暝重复词条）、洛可可旧条目等。名单统计时**先按图标文件名核对再计数**。
 - **参考数据**（2026-08-30 实测）：共鸣者分类共 64 条目，漂泊者占 8 条（4 属性 × 男/女），去重后 57 名独特角色；角色站 wuthering.gg 同期口径"鸣潮全部 57 名角色"可交叉验证。
+
+### 8. 临时文件路径：**禁止 `/tmp`**（Windows 专属坑，2026-10-01）
+
+- **现象**：`python ... > /tmp/x.json` 写成功，下一步 `python -c "open('/tmp/x.json')"` 却报 `FileNotFoundError`。
+- **根因**：Git Bash 会把 `/tmp` 解析成 MSYS 的临时目录，而**Windows 版 Python 把 `/tmp` 当成"当前盘符根目录"**，实际去找 `C:\tmp\...`。写和读落在两个地方。
+- **正确做法**：给 python 用的临时路径一律写 **Windows 绝对路径**，直接引用 `%TEMP%`（Git Bash 里是 `"$TEMP"` / `"$LOCALAPPDATA/Temp"`）。例：
+  `python -X utf8 -u $SKILL_DIR/scripts/wikiquery.py detail <id> > "$TEMP/kuro_detail.json"`
+- 这条与第 2 条（命令拼接）同源：**凡是交给 python 的路径，都不要用 shell 的虚拟路径。**
+
+### 9. `post` 子命令的 Playwright 依赖：必须装在**同一个解释器**下（2026-10-01）
+
+- **现象**：`post <帖子ID>` 报「未安装 playwright」，但明明 pip 装过。
+- **根因**：`post` 内部用 `sys.executable` 拉起 `post_fetch.py`，**playwright 必须装在"运行 wikiquery.py 的那个 python"里**。用 A 解释器装、用 B 解释器跑 = 等于没装。
+- **正确做法**：脚本现在会**自动预检**，并直接打印带绝对路径的两行命令，照抄即可（不会再有"到底装给谁"的困惑）：
+  `<当前解释器> -m pip install playwright` + `<当前解释器> -m playwright install chromium`（chromium 约 115MB）。
+- 建议放在隔离 venv 里装，避免污染系统环境。
+- 另：`post` 只对**社区帖**有意义。帖子分 `postType=1` 图片帖（图在 `postContent[].url`）与 `postType=2` 视频帖（只有 m3u8 地址），**必须先 `post <id> --json` 看类型**，别把视频帖当一图流处理。
+
+### 10. `list --json` 的结构键名是 `records`（2026-10-01）
+
+- `wikiquery.py list <分类> --json` 返回 `{"category": {...}, "total": N, "records": [...]}`。
+- **键名是 `records`，不是 `list`/`items`/`data`**。写成 `d.get("list", [])` 会**静默拿到空列表**，看起来像"这个分类里没有目标条目"，从而误判结论。解析前先 `print(d.keys())` 确认。
+- 另外：**条目 id 与卡片 id 是两个字段**——`entryId` = 真实词条 id（部分卡片为 `None`），`id` = 目录卡片 id。拿不准时用 `--images` 让脚本算好（见第 11 条）。
+
+### 11. `list --images` 的「正文ID」已修复（2026-10-01）
+
+- **旧版 bug**：只在 `content.linkType==1` 时取 `linkUrl` 当正文 id，导致
+  ① `linkType=2` 的外链卡（如合鸣效果）回退打印**卡片自身 id** → 拿去 `detail` 必 2031；
+  ② 老卡片的脏 `linkUrl`（实测有 `"11"`、`"ww"` 这种）被当成 id 输出。
+- **现状**：统一走内部 `_card_body_id()`，按 `content.linkUrl`（正则抽 `/item/<id>`）→
+  `linkGather[].linkConfig` → `record.entryId` 三级回退，且不认非数字脏值。
+- 所以：**取"真实正文 id"优先用 `list <分类> --images`**，比手工解析 record 更稳。
+
+### 12. 机制画像缓存有 14 天过期（2026-10-01）
+
+- `probe` / `team` 用的角色画像缓存在 `~/.kurobbs-wiki-cache/roster/<角色名>.json`，
+  **旧版永不过期**，会拿旧版本画像回答新角色 → 得出方向性错误结论
+  （实例：3.7 新角色「心」的旧画像里「同奏」命中 0 次，差点被判为"没有该机制"）。
+- **现状**：缓存写入 `fetchedAt`，**超过 14 天自动失效重拉**（无 `fetchedAt` 的老缓存退化为按文件修改时间判断）。
+- **仍然建议**：查**刚实装 / 刚改动**的角色，第一次一律显式加 `--refresh`
+  （`probe <角色> --refresh`）。TTL 只是兜底，不解决"刚更新"的即时性问题。
+- 想强制全体重拉：删 `~/.kurobbs-wiki-cache/roster/` 或逐个 `--refresh`。
